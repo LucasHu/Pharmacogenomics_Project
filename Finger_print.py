@@ -32,8 +32,7 @@ def generate_fingerprint(fingerprint_type, mols):
         fp = [AllChem.GetMorganFingerprintAsBitVect(m, 2) for m in mols]
     else:
         print "the fingerprint is not supported here!"
-
-    print fp
+        
     x = rdkit_numpy_convert(fp)
     return x
 
@@ -55,11 +54,19 @@ def get_descriptors(mols):
 
 
 def main():
+
     # the path of sdf file
     fname = "/Users/lucasminghu/Desktop/Pharmacogenomics/structures.sdf"
 
     molecules = read_sdf_file(fname)
+
+    finger_print_matrix = generate_fingerprint("Morgan2", molecules)
     
+    extra_chemical_descriptor_matrix = get_descriptors(molecules)
+
+    print np.shape(extra_chemical_descriptor_matrix)
+
+
 
 
 if __name__ == "__main__":
