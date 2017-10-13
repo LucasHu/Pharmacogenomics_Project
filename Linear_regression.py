@@ -1,9 +1,10 @@
-from sklearn import datasets
+#from sklearn import datasets
 import matplotlib.pyplot as plt
 import numpy as np
 import math
 import os
 import sys
+import Feature_generation as FG
 
 def load_data(file_directory):
 
@@ -83,19 +84,13 @@ def load_data(file_directory):
 
     print target_matrix
 
-
-
-
-
-
-
-
     #boston = datasets.load_boston()
     #X = boston.data
     #y = boston.target
     #features = boston.feature_names
     #return X, y, features
 
+# load target file, return a target dictionary and a protein list
 def load_target(file_dirctory):
     target_dictionary = {}
     with open(file_dirctory) as fp:
@@ -104,7 +99,7 @@ def load_target(file_dirctory):
             line = line.rstrip()
             items = line.split(",")
             target = items[0]
-            drugs = items[-1]
+            drugs = (items[-1]).replace(" ", "") #some drugbankID has white space in the front
             drugs_list = drugs.split(";")
 
             if target not in target_dictionary:
@@ -117,23 +112,21 @@ def load_target(file_dirctory):
 
     return target_dictionary, protein_list
 
-    #print target_dictionary
+def generate_target_matrix(file_dirctory, drugID_list):
+    target_dictionary, protein_list = load_target(file_dirctory)
 
-    # all_drugs_in_training = []
-    # for keys in target_dictionary:
-    #     all_drugs_in_training = list(set(all_drugs_in_training + target_dictionary[keys]))
-    #
-    # training_dictionary = {}
-    # for items in all_drugs_in_training:
-    #     training_dictionary[items] = []
-    #     for keys in target_dictionary:
-    #         if items in target_dictionary[keys]:
-    #             training_dictionary[items].append(1)
-    #         else:
-    #             training_dictionary[items].append(0)
-    #
-    # for keys in training_dictionary:
-    #     print (len(training_dictionary[keys]))
+    # set a np.array has the size as No_Drugs * No_Proteins
+    target_matrix = np.zeros((len(drugID_list), len(protein_list)))
+
+    for i in range(len(drugID_list)):
+        for keys in target_dictionary:
+            if drugID_list[i] in target_dictionary[keys]:
+                index = protein_list.index(keys)
+                target_matrix[i, index] = 1
+
+    return target_matrix, protein_list
+
+
 
 
 def visualize(X, y, features):
@@ -206,92 +199,100 @@ def compute_MAE(predicted_y, target_y):
     return MAE
 
 
-if __name__ == '__main__':
-    if __name__ == '__main__':
-        def main():
-            # Load the data
-            X, y, features = load_data("/Users/lucasminghu/Desktop/Pharmacogenomics/similarity_scores_for_fingerprints")
-            print("Features: {}".format(features))
-            #
-            # # Visualize the features
-            # visualize(X, y, features)
-            #
-            # # Generate the indices for training and testing sets based on the 80% vs. 20% splitting using np.random.choice function
-            # training_index = np.random.choice(np.arange(np.shape(X)[0]), int(round(np.shape(X)[0] * 0.8)),
-            #                                   replace=False)
-            # testing_index = np.setdiff1d(np.arange(np.shape(X)[0]), training_index)
-            #
-            # # Generate training and testing sets using the previously generated indices
-            # training_data = X[training_index, :]
-            # training_targets = y[training_index]
-            #
-            # test_data = X[testing_index, :]
-            # test_targets = y[testing_index]
-            #
-            # # Fit regression model
-            # w = fit_regression(X, y)
-            # print ("the weight vector generated from all data: ")
-            # print w
-            #
-            # # Compute fitted values, MSE, etc.
-            #
-            # # Fit regression model by training data
-            # new_testing_data = add_bias(test_data)  # add bias term
-            # w2 = fit_regression(training_data, training_targets)
-            # print ("the weight vector generated from training data: ")
-            # print w2
-            #
-            # text_file = open("Q1_weight vectors.txt", "w")
-            #
-            # feature_list = features.tolist()
-            # weight_list = w[1:].tolist()
-            #
-            # text_file.write("\t".join(feature_list))
-            # text_file.write("\n")
-            # text_file.write("\t".join(str(e) for e in weight_list))
-            # text_file.close()
-            #
-            # # predicted the y values of tetsing data set based on the fitted model from training dataset
-            # predicted_y = np.matmul(new_testing_data, w2)
-            #
-            # # calculate MSE
-            # MSE = compute_MSE(predicted_y, test_targets)
-            # print ("Mean Square Error is: " + str(MSE))
-            #
-            # # calculate RMS
-            # RMS = compute_RMS(predicted_y, test_targets)
-            # print ("Root Mean Square Error is: " + str(RMS))
-            #
-            # # calculate MAE
-            # MAE = compute_MAE(predicted_y, test_targets)
-            # print ("Mean Absolute Error is: " + str(MAE))
-            #
-            # # create a file to store the feature selection result.
-            # text_file = open("Q1_feature_selection.txt", "w")
-            # text_file.write("the feature ommited is:" + "\t" + "resulting MSE")
-            # text_file.write("\n")
-            #
-            # # Test each feature individually to find out the most important features
-            # # in each loop, omit one feature, and re-do the linear regression and compute the MSE
-            # # if the the higher the MSE is, the more important the omitted feature is.
-            # for i in range(np.size(features)):
-            #     column_number = i + 1
-            #     selected_training = np.concatenate(
-            #         (training_data[:, 0:i], training_data[:, i + 1:np.shape(training_data)[1]]), axis=1)
-            #     selected_testing = np.concatenate((new_testing_data[:, 0:column_number], new_testing_data[:,
-            #                                                                              column_number + 1:
-            #                                                                              np.shape(new_testing_data)[
-            #                                                                                  1]]), axis=1)
-            #     print ("the omitted feature: ")
-            #     print (features[i])
-            #     w3 = fit_regression(selected_training, training_targets)
-            #     new_predicted_y = np.matmul(selected_testing, w3)
-            #     new_MSE = compute_MSE(new_predicted_y, test_targets)
-            #     print (new_MSE)
-            #     text_file.write(features[i])
-            #     text_file.write("\t")
-            #     text_file.write(str(new_MSE))
-            #     text_file.write("\n")
+
+def main():
+    # Load the data
+    #X, y, features = load_data("/Users/lucasminghu/Desktop/Pharmacogenomics/similarity_scores_for_fingerprints")
+    #print("Features: {}".format(features))
+
+    combined_matrix, drugbank_ID = FG.main()
+
+    target_matrix, protein_list = generate_target_matrix("/Users/lucasminghu/Desktop/Pharmacogenomics/all.csv", drugbank_ID)
+
+    X = combined_matrix
+    y = target_matrix[:,0] #just test the first protein
+
+
+    # Visualize the features
+    #visualize(X, y, features)
+
+    # Generate the indices for training and testing sets based on the 80% vs. 20% splitting using np.random.choice function
+    training_index = np.random.choice(np.arange(np.shape(X)[0]), int(round(np.shape(X)[0] * 0.8)),
+                                      replace=False)
+    testing_index = np.setdiff1d(np.arange(np.shape(X)[0]), training_index)
+
+    # Generate training and testing sets using the previously generated indices
+    training_data = X[training_index, :]
+    training_targets = y[training_index]
+
+    test_data = X[testing_index, :]
+    test_targets = y[testing_index]
+
+    # Fit regression model
+    w = fit_regression(X, y)
+    print ("the weight vector generated from all data: ")
+    print w
+
+    # Compute fitted values, MSE, etc.
+
+    # Fit regression model by training data
+    new_testing_data = add_bias(test_data)  # add bias term
+    w2 = fit_regression(training_data, training_targets)
+    print ("the weight vector generated from training data: ")
+    print w2
+
+    text_file = open("weight vectors.txt", "w")
+
+    feature_list = range(1, np.shape(combined_matrix)[1] + 1)
+
+    weight_list = w[1:].tolist()
+
+    text_file.write("\t".join(("feature" + str(x)) for x in feature_list))
+    text_file.write("\n")
+    text_file.write("\t".join(str(e) for e in weight_list))
+    text_file.close()
+
+    # predicted the y values of tetsing data set based on the fitted model from training dataset
+    predicted_y = np.matmul(new_testing_data, w2)
+
+    # calculate MSE
+    MSE = compute_MSE(predicted_y, test_targets)
+    print ("Mean Square Error is: " + str(MSE))
+
+    # calculate RMS
+    RMS = compute_RMS(predicted_y, test_targets)
+    print ("Root Mean Square Error is: " + str(RMS))
+
+    # calculate MAE
+    MAE = compute_MAE(predicted_y, test_targets)
+    print ("Mean Absolute Error is: " + str(MAE))
+
+    # create a file to store the feature selection result.
+    text_file = open("feature_selection.txt", "w")
+    text_file.write("the feature ommited is:" + "\t" + "resulting MSE")
+    text_file.write("\n")
+
+    # Test each feature individually to find out the most important features
+    # in each loop, omit one feature, and re-do the linear regression and compute the MSE
+    # if the the higher the MSE is, the more important the omitted feature is.
+    for i in range(np.size(feature_list)):
+        column_number = i + 1
+        selected_training = np.concatenate(
+            (training_data[:, 0:i], training_data[:, i + 1:np.shape(training_data)[1]]), axis=1)
+        selected_testing = np.concatenate((new_testing_data[:, 0:column_number], new_testing_data[:,
+                                                                                 column_number + 1:
+                                                                                 np.shape(new_testing_data)[
+                                                                                     1]]), axis=1)
+        print ("the omitted feature: ")
+        print ("feature" + str(feature_list[i]))
+        w3 = fit_regression(selected_training, training_targets)
+        new_predicted_y = np.matmul(selected_testing, w3)
+        new_MSE = compute_MSE(new_predicted_y, test_targets)
+        print (new_MSE)
+        text_file.write("feature"+str(feature_list[i]))
+        text_file.write("\t")
+        text_file.write(str(new_MSE))
+        text_file.write("\n")
 
 if __name__ == "__main__":
     main()

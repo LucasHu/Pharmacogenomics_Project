@@ -8,13 +8,15 @@ import numpy as np
 #from sklearn.metrics import accuracy_score, cohen_kappa_score, matthews_corrcoef
 #from sklearn.externals import joblib
 
+# read sdf file into molecule class in rdkit
 def read_sdf_file(directory):
     mols = []
+    drugbank_ID = []
     for mol in Chem.SDMolSupplier(directory):
         if mol is not None:
             mols.append(mol)
-
-    return mols
+            drugbank_ID.append(mol.GetProp("DRUGBANK_ID"))
+    return mols, drugbank_ID
 
 # convert fingerprint BitVec to np.array
 def rdkit_numpy_convert(fp):
@@ -58,13 +60,16 @@ def main():
     # the path of sdf file
     fname = "/Users/lucasminghu/Desktop/Pharmacogenomics/structures.sdf"
 
-    molecules = read_sdf_file(fname)
+    molecules, drugbank_ID = read_sdf_file(fname)
 
-    finger_print_matrix = generate_fingerprint("Morgan2", molecules)
+    Mogen2_matrix = generate_fingerprint("Morgan2", molecules)
     
     extra_chemical_descriptor_matrix = get_descriptors(molecules)
 
-    print np.shape(extra_chemical_descriptor_matrix)
+    combined_matrix =np.concatenate((Mogen2_matrix, extra_chemical_descriptor_matrix), axis=1)
+
+    return combined_matrix, drugbank_ID
+
 
 
 
