@@ -198,6 +198,54 @@ def compute_MAE(predicted_y, target_y):
     MAE = sum / np.size(target_y)
     return MAE
 
+# Build a function for 5_fold cross_validation
+def five_fold_cross_validation(X, y):
+    MSE = 0
+    RMS = 0
+    MAE = 0
+    for i in range(5):
+        # Generate the indices for training and testing sets based on the 80% vs. 20% splitting using np.random.choice function
+        training_index = np.random.choice(np.arange(np.shape(X)[0]), int(round(np.shape(X)[0] * 0.8)),
+                                      replace=False)
+        testing_index = np.setdiff1d(np.arange(np.shape(X)[0]), training_index)
+
+        # Generate training and testing sets using the previously generated indices
+        training_data = X[training_index, :]
+        training_targets = y[training_index]
+
+        test_data = X[testing_index, :]
+        test_targets = y[testing_index]
+
+        # Fit regression model by training data
+        new_testing_data = add_bias(test_data)  # add bias term
+        w2 = fit_regression(training_data, training_targets)
+        print ("the weight vector generated from training data: ")
+        print w2
+
+        predicted_y = np.matmul(new_testing_data, w2)
+        print predicted_y
+
+        # calculate MSE
+        MSE += compute_MSE(predicted_y, test_targets)
+        #print ("Mean Square Error is: " + str(MSE))
+
+        # calculate RMS
+        RMS += compute_RMS(predicted_y, test_targets)
+        #print ("Root Mean Square Error is: " + str(RMS))
+
+        # calculate MAE
+        MAE += compute_MAE(predicted_y, test_targets)
+        #print ("Mean Absolute Error is: " + str(MAE))
+
+    average_MSE = MSE / 5
+    average_RMS = RMS / 5
+    average_MAE = MAE / 5
+
+    print ("Mean Square Error is: " + str(average_MSE))
+    print ("Root Mean Square Error is: " + str(average_RMS))
+    print ("Mean Absolute Error is: " + str(average_MAE))
+
+    return average_MSE, average_RMS, average_MAE
 
 
 def main():
@@ -216,56 +264,20 @@ def main():
     # Visualize the features
     #visualize(X, y, features)
 
-    # Generate the indices for training and testing sets based on the 80% vs. 20% splitting using np.random.choice function
-    training_index = np.random.choice(np.arange(np.shape(X)[0]), int(round(np.shape(X)[0] * 0.8)),
-                                      replace=False)
-    testing_index = np.setdiff1d(np.arange(np.shape(X)[0]), training_index)
-
-    # Generate training and testing sets using the previously generated indices
-    training_data = X[training_index, :]
-    training_targets = y[training_index]
-
-    test_data = X[testing_index, :]
-    test_targets = y[testing_index]
 
     # Fit regression model
-    w = fit_regression(X, y)
-    print ("the weight vector generated from all data: ")
-    print w
+    #w = fit_regression(X, y)
+    #print ("the weight vector generated from all data: ")
+    #print w
+    text_file = open("MAE_for_each_protein.txt", "w")
+    for i in range(len(protein_list)):
+        y = target_matrix[:,i]
+        average_MSE, average_RMS, average_MAE = five_fold_cross_validation(X,y)
+        text_file.write(protein_list[i] + "\t" + str(np.sum(y)) + "\t" + str(average_MSE))
+        text_file.write("\n")
 
-    # Compute fitted values, MSE, etc.
 
-    # Fit regression model by training data
-    new_testing_data = add_bias(test_data)  # add bias term
-    w2 = fit_regression(training_data, training_targets)
-    print ("the weight vector generated from training data: ")
-    print w2
-
-    text_file = open("weight vectors.txt", "w")
-
-    feature_list = range(1, np.shape(combined_matrix)[1] + 1)
-
-    weight_list = w[1:].tolist()
-
-    text_file.write("\t".join(("feature" + str(x)) for x in feature_list))
-    text_file.write("\n")
-    text_file.write("\t".join(str(e) for e in weight_list))
-    text_file.close()
-
-    # predicted the y values of tetsing data set based on the fitted model from training dataset
-    predicted_y = np.matmul(new_testing_data, w2)
-
-    # calculate MSE
-    MSE = compute_MSE(predicted_y, test_targets)
-    print ("Mean Square Error is: " + str(MSE))
-
-    # calculate RMS
-    RMS = compute_RMS(predicted_y, test_targets)
-    print ("Root Mean Square Error is: " + str(RMS))
-
-    # calculate MAE
-    MAE = compute_MAE(predicted_y, test_targets)
-    print ("Mean Absolute Error is: " + str(MAE))
+    sys.exit()
 
     # create a file to store the feature selection result.
     text_file = open("feature_selection.txt", "w")
