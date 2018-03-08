@@ -59,6 +59,9 @@ def read_CMap_generate_sig_IDs(fname = "GSE92742_Broad_LINCS_sig_info.txt"):
 
 # A helper function to generate a dictionary that the key is pertID and the value is drugbank ID...
 def generate_broadpert_DrugBank_dict():
+
+    _, drug_name_set = FeatureGeneration.read_DrugBank()
+
     # read pertID_InCHiKey_Dict mapping file...
     pert_ID_InChiKey_dict = readDrugInformation() #pertID and InChiKey overlap is 51384
 
@@ -68,9 +71,11 @@ def generate_broadpert_DrugBank_dict():
     # map pertID to DrugBankID...
     pert_ID_DrugBank_ID_dict = {}
 
+    # the drugs here are the one in drug-protein interaction list
     for drug in pert_ID_InChiKey_dict:
         if pert_ID_InChiKey_dict[drug] in INCHI_KEY_ID_drugbank_ID_dict:
-            pert_ID_DrugBank_ID_dict[drug] = INCHI_KEY_ID_drugbank_ID_dict[pert_ID_InChiKey_dict[drug]] # pertID and DrugBankID overlap is 3786
+            if INCHI_KEY_ID_drugbank_ID_dict[pert_ID_InChiKey_dict[drug]] in drug_name_set:
+                pert_ID_DrugBank_ID_dict[drug] = INCHI_KEY_ID_drugbank_ID_dict[pert_ID_InChiKey_dict[drug]] # pertID and DrugBankID overlap is 3786
         else:
             pass
 
@@ -98,8 +103,8 @@ if __name__ == '__main__':
                 if pertID_drugbankID_dict[keys] == drug_protein_pair[1]:
                     selected_drug_protein_list_with_CMap_data[keys] = drug_protein_pair
 
-        print len(protein_drug_list)
-        print len(drug_name_list)
+        print "selected_drug_protein_list_with_CMap_data_overlap: " + str(len(selected_drug_protein_list_with_CMap_data))
+        sys.exit()
 
         # a way to generate mol objecy from SMILE string directly...
         m2 = Chem.MolFromSmiles('C1CCC1')
@@ -113,23 +118,17 @@ if __name__ == '__main__':
         # get the ids for signature IDs for those perturbation drugs in both drug-target interaction pairs and CMap... ~ 2700
         for key in pertID_with_drugbank_interaction_dict:
 
-            #selected_sig_id_list.append(sig_info["sig_id"][sig_info["pert_id"] == key])
+            selected_sig_id_list.append(sig_info["sig_id"][sig_info["pert_id"] == key])
 
-            if len(sig_info["sig_id"][sig_info["pert_id"] == key]) == 0:
-                test.append(key)
-        #print test
-        #print len(test)
+        gene_info = pd.read_csv("GSE92742_Broad_LINCS_gene_info.txt", sep="\t", dtype=str)
 
-        #print selected_sig_id_list
-        #print len(selected_sig_id_list)
+        landmark_gene_row_ids = gene_info["pr_gene_id"][gene_info["pr_is_lm"] == "1"]
 
+        my_col_metadata = parse("GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n473647x12328.gctx", col_meta_only=True)
 
-
-        #gene_info = pd.read_csv("GSE92742_Broad_LINCS_gene_info.txt", sep="\t", dtype=str)
-
-        #landmark_gene_row_ids = gene_info["pr_gene_id"][gene_info["pr_is_lm"] == "1"]
-
-        #my_col_metadata = parse("GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n473647x12328.gctx", col_meta_only=True)
+        print my_col_metadata
+        print type(my_col_metadata)
+        print np.shape(my_col_metadata)
 
         #vorinostat_only_gctoo = parse("GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n473647x12328.gctx", cid=vorinostat_ids)
 
