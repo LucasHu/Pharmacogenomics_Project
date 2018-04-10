@@ -5,7 +5,8 @@ import sys
 import random
 from sklearn.model_selection import train_test_split
 import Deep_learning as DL
-from rdkit.Chem import Draw
+import Feature_generation as Fg
+import os
 #import matplotlib.pyplot as plt
 #import pylab as pl
 
@@ -85,7 +86,7 @@ def get_descriptors(mols):
     descr = np.asarray(descr)
     return descr
 
-#get all protein sequence descriptors by using
+#get all protein sequence descriptors by using propy
 def get_protein_sequence_descriptor(Uniprot_ID_list, no_compitable_sequence_file_name):
 
     #write a file has non-compatable protein sequence...
@@ -123,8 +124,8 @@ def get_protein_sequence_descriptor(Uniprot_ID_list, no_compitable_sequence_file
     return descr
 
 
-#Read DrugBank data and get the training data
-def read_DrugBank(fname = "DrugBank_drug_uniprot_links_20180117.csv"):
+#Read PubChem data and get the training data
+def read_PubChem(fname = "./PubChem/BindingDB_PubChem.tsv"):
 
     protein_drug_list = []
     drug_name_list = set()
@@ -133,13 +134,11 @@ def read_DrugBank(fname = "DrugBank_drug_uniprot_links_20180117.csv"):
         next(fp)
         for line in fp:
             line = line.rstrip()
-            items = line.split(",")
-            UniProt = items[3]
-            type = items[2]
-            drug = items[0]
+            items = line.split("\t")
 
-            if "SmallMoleculeDrug" in type: # only keep the small molecule drugs
-
+            if len(items) > 41 and items[41] != "" :
+                UniProt = items[41]
+                drug = items[1]
                 protein_drug = (UniProt, drug)
                 protein_drug_list.append(protein_drug)
                 drug_name_list.add(drug)
@@ -187,7 +186,7 @@ def read_fragment_file(file = "FDB-17/FDB-17-fragmentset.smi"):
     return fragment_list
 
 # Generate test drug input matrix
-def Generate_test_drug_input_matrix(Molecules_smile_list):
+def Generate_test_drug_input_matrix(Molecules_smile_list, protein_sequence_fingerprint_file):
 
     drug_molecule_list = []
     for molecule_smile in Molecules_smile_list:
@@ -196,7 +195,11 @@ def Generate_test_drug_input_matrix(Molecules_smile_list):
     Mogen2_matrix = generate_fingerprint("Morgan2", drug_molecule_list)
 
     #protein_sequence_fingerprint = np.loadtxt("./PubChem/Protein_sequence_descriptors_matrix_for_proteins_protein_drug_interaction_from_PubChem.txt")
-    protein_sequence_fingerprint = np.loadtxt("Protein_sequence_descriptors_matrix_for_NADH_proteins.txt")
+    protein_sequence_fingerprint = (np.loadtxt(protein_sequence_fingerprint_file))[0:10,:] #test the first ten proteins
+
+    #print "debug here"
+    #print np.shape(protein_sequence_fingerprint)
+    #sys.exit()
 
     Mogen3_matrix = generate_fingerprint("Morgan3", drug_molecule_list)
     AtomPair_matrix = generate_fingerprint("AtomPair", drug_molecule_list)
@@ -214,74 +217,113 @@ def Generate_test_drug_input_matrix(Molecules_smile_list):
 
     return exp_matrix
 
-# Read all drug targets from DrugBank.
-def read_targets_DrugBank(file = "./drugbank_all_target_polypeptide_sequences.fasta/protein.fasta"):
-    drug_targets_drugbank = []
+
+# Get Frament library
+def get_fragment(file = "./Fragment_Library/Enamine_Ro3_Fragments.sdf"):
+    file_items = file.split("/")
+    actual_file = file_items.pop()
+    path = "/".join(file_items)
+    cwd = os.getcwd() # get the current directory
+    os.chdir(path)
+    fragment_library = Chem.SDMolSupplier(actual_file)
+    smile_list = []
+    for fragment in fragment_library:
+        smile = Chem.MolToSmiles(fragment)
+        smile_list.append(smile)
+
+    print "the number of fragment molecules is:" + str(len(smile_list))
+
+    os.chdir(cwd) # need to change back
+
+    return smile_list
+
+# Exclude non_compatible list proteins from the whole list...
+# the order shouldnt be changed...
+def get_final_protein_list(whole_list, non_compatible_list):
+    new_list = []
+    for item in whole_list:
+        if item not in non_compatible_list:
+            new_list.append(item)
+    return new_list
+
+#read non_compatible protein files into a list...
+def get_non_compatible_list(file):
+    new_list = []
     with open(file) as fp:
         for line in fp:
             line = line.rstrip()
-            if "drugbank" in line:
-                items = line.split(" ")
-                items2 = items[0].split("|")
-                protein = items2[1]
-                if protein not in drug_targets_drugbank:
-                    drug_targets_drugbank.append(protein)
-    print "number of drug targets in DrugBank is: " + str(len(drug_targets_drugbank))
-
-    return drug_targets_drugbank
+            items = line.split()
+            new_list.append(items[0])
+    return new_list
 
 def main():
 
+    # read Enamine_Ro3_Fragments.sdf database...
+    fragment_list = get_fragment()
+
+    # read DRUGBANK targets information and exluce the non-reading targets and generate the final targets list
+    DRUG_bank_targets = Fg.read_targets_DrugBank()
+    non_compatible_DRUG_bank_targets = get_non_compatible_list("non_compitable_sequence_DRUGBANK_targets.txt")
+    final_DRUG_bank_targets = get_final_protein_list(DRUG_bank_targets, non_compatible_DRUG_bank_targets)
+
+    new_fragments_matrix = Generate_test_drug_input_matrix(fragment_list, "Protein_sequence_descriptors_matrix_for_proteins_from_DRUGBANK_targets.txt")
+    #print new_fragments_matrix
+    print "the size of matrix is:"
+    print np.shape(new_fragments_matrix)
+
     # all the protein_drug from DrugBank...
-    protein_drug_from_DrugBank_list, drug_name_list = read_DrugBank() #14945 drug-protein pairs and 4993 drugs in those pairs
+    protein_drug_from_PubChem_list, drug_name_list = read_PubChem() #14945 drug-protein pairs and 4993 drugs in those pairs
 
     # the path of sdf file
-    fname = "structures.sdf"
-    molecules, drugbank_ID, INCHI_KEY, INCHI_KEY_ID_drugbank_ID_dict = read_sdf_file_drugbank(fname) # in total 8738 drugs in drug bank.
+    #fname = "structures.sdf"
+    #molecules, drugbank_ID, INCHI_KEY, INCHI_KEY_ID_drugbank_ID_dict = read_sdf_file_drugbank(fname) # in total 8738 drugs in drug bank.
+    #molecules_set = set()
+    protein_set = set()
+    molecules_smiles = set()
 
-    # generate the lists of the legible list of drugs and corresponding proteins with legible structure can be found in DrugBank...
-    drug_molecule_list = []
-    corresponding_protein_list = []
-    drug_molecule_list_ID = []
+    for pairs in protein_drug_from_PubChem_list:
+        drug = pairs[1]
+        protein = pairs[0]
+        #drug_mol = Chem.MolFromSmiles(drug)
+        #molecules_set.add(drug_mol)
+        protein_set.add(protein)
+        molecules_smiles.add(drug)
+    print "molecules_set and protein_set are finished!"
 
-    for item_pair in protein_drug_from_DrugBank_list:
-        proteinID = item_pair[0]
-        drugID = item_pair[1]
-        if  drugID in drugbank_ID:
-            index_in_molecules = drugbank_ID.index(drugID)
+    # generate the lists of the legible list of drugs and corresponding proteins with legible structure can be found in PubChem...
+    corresponding_protein_list = list(protein_set)
+    molecules_smiles_list = list(molecules_smiles)
 
-            if molecules[index_in_molecules] not in drug_molecule_list:
-                drug_molecule_list.append(molecules[index_in_molecules])
-                drug_molecule_list_ID.append(drugID) #drugbank ID used for tracking molecules list
-            if proteinID not in corresponding_protein_list:
-                corresponding_protein_list.append(proteinID)
-
-    #print len(drug_molecule_list) # 4751 legible drugs
-    #print len(corresponding_protein_list) # 3955 proteins here
+    print len(corresponding_protein_list) # 533 proteins here
+    print len(molecules_smiles_list) # 52802
 
     # Generate protein sequence features...
     #protein_sequence_features_matrix = get_protein_sequence_descriptor(corresponding_protein_list, "non_compitable_sequence_drugbank.txt")
     #protein_sequence_features_matrix = get_protein_sequence_descriptor(read_uniprot_database(), "non_compitable_sequence_uniprot.txt")
-    # protein_sequence_features_matrix = get_protein_sequence_descriptor(corresponding_protein_list, "non_compitable_sequence_PubChem.txt")
-    #protein_sequence_features_matrix = get_protein_sequence_descriptor(read_targets_DrugBank(), "non_compitable_sequence_DRUGBANK_targets.txt")
-    #np.savetxt('Protein_sequence_descriptors_matrix_for_proteins_from_DRUGBANK_targets.txt', protein_sequence_features_matrix, delimiter='\t')
+    #protein_sequence_features_matrix = get_protein_sequence_descriptor(corresponding_protein_list, "non_compitable_sequence_PubChem.txt")
     #np.savetxt('Protein_sequence_descriptors_matrix_for_proteins_protein_drug_interaction_from_uniprot.txt', protein_sequence_features_matrix, delimiter='\t')
     #np.savetxt('Protein_sequence_descriptors_matrix_for_proteins_protein_drug_interaction_from_PubChem.txt', protein_sequence_features_matrix, delimiter='\t')
     ###########the part above once done once then can be store into a txt file, no need to run it everytime.
 
+
     #read the protein list that can't be processed by propy...
-    bad_proteins_drugbank = read_txt_file("non_compitable_sequence_drugbank.txt")
+    bad_proteins_drugbank = read_txt_file("./PubChem/non_compitable_sequence_PubChem.txt")
 
     #exclude the not compitable proteins names from the "corresponding_protein_list", we need the list to map the index to protein sequence features matrix...
-    final_protein_list_drugbank = []
+    final_protein_list_PubChem = []
 
     for protein in corresponding_protein_list:
         if protein not in bad_proteins_drugbank:
-            final_protein_list_drugbank.append(protein) #final_protein_list_drugbank can be used to map protein names from the final protein sequence features matrix
+            final_protein_list_PubChem.append(protein) #final_protein_list_drugbank can be used to map protein names from the final protein sequence features matrix
+
+    # generate drug_molecule_list...
+    drug_molecule_list = []
+    for molecule_smile in molecules_smiles_list:
+        drug_molecule_list.append(Chem.MolFromSmiles(molecule_smile))
 
     Mogen2_matrix = generate_fingerprint("Morgan2", drug_molecule_list)
 
-    protein_sequence_fingerprint = np.loadtxt("Protein_sequence_descriptors_matrix_for_proteins_protein_drug_interaction_from_drugbank.txt")
+    protein_sequence_fingerprint = np.loadtxt("./PubChem/Protein_sequence_descriptors_matrix_for_proteins_protein_drug_interaction_from_PubChem.txt")
 
     Mogen3_matrix = generate_fingerprint("Morgan3", drug_molecule_list)
     AtomPair_matrix = generate_fingerprint("AtomPair", drug_molecule_list)
@@ -289,17 +331,19 @@ def main():
     Mogen2_matrix = np.concatenate((Mogen2_matrix, Mogen3_matrix, AtomPair_matrix), axis=1)
 
     print Mogen2_matrix.shape
+    print "molecules fingerprint calculation is done!"
 
 
     # get extra chemical features...
-    extra_chemical_descriptor_matrix = get_descriptors(drug_molecule_list)
+    #extra_chemical_descriptor_matrix = get_descriptors(drug_molecule_list)
+    #print "chemical descriptors is done."
 
 
     # since I dont want to use inefficient "stack" function, I will build a matrix of desriable size to store the information...
     # let's count how many legible drug-protein paris first...
     final_legible_drug_protein_pair_count = 0
-    for pairs in protein_drug_from_DrugBank_list:
-        if pairs[0] in final_protein_list_drugbank and pairs[1] in drug_molecule_list_ID:
+    for pairs in protein_drug_from_PubChem_list:
+        if pairs[0] in final_protein_list_PubChem:
             final_legible_drug_protein_pair_count += 1
 
     #column_no = Mogen2_matrix.shape[1] + protein_sequence_fingerprint.shape[1] + extra_chemical_descriptor_matrix.shape[1]
@@ -308,24 +352,21 @@ def main():
     # organize a matrix the for training_positive...
     input_matrix_positive = np.zeros((final_legible_drug_protein_pair_count, column_no))
 
+    print "the size of positive training matrix is: "
+    print np.shape(input_matrix_positive)
+
     # read the information from Mogen2_matrix and protein_sequence_fingerprint and store in input_matrix...
     row_no = 0
 
     # a list to record the drug-protein pair...
     drug_protein_index_pair_exclusive_list = []
 
-    if len(drug_molecule_list_ID) != np.shape(Mogen2_matrix)[0]:
-        print "drug_molecule_list_ID and Mogen2_matrix do not match"
-        sys.exit()
-    elif len(drug_molecule_list_ID) != np.shape(extra_chemical_descriptor_matrix)[0]:
-        print "drug_molecule_list_ID and extra_chemical_descriptor_matrix do not match"
-        sys.exit()
+    for pairs in protein_drug_from_PubChem_list:
 
-    for pairs in protein_drug_from_DrugBank_list:
-        if pairs[0] in final_protein_list_drugbank and pairs[1] in drug_molecule_list_ID:
+        if pairs[0] in final_protein_list_PubChem:
 
-            protein_index  = final_protein_list_drugbank.index(pairs[0])
-            drug_index = drug_molecule_list_ID.index(pairs[1])
+            protein_index  = final_protein_list_PubChem.index(pairs[0])
+            drug_index = molecules_smiles_list.index(pairs[1])
             drug_protein_pair = (drug_index, protein_index)
             drug_protein_index_pair_exclusive_list.append(drug_protein_pair)
             #combined_row = np.concatenate((Mogen2_matrix[drug_index, :], protein_sequence_fingerprint[protein_index , :], extra_chemical_descriptor_matrix[drug_index, :]), axis=0)
@@ -338,8 +379,8 @@ def main():
 
     count = 0
     while count < np.shape(input_matrix_negative)[0]:
-        drug_index = random.randint(0, len(drug_molecule_list_ID) - 1)
-        protein_index = random.randint(0, len(final_protein_list_drugbank) - 1)
+        drug_index = random.randint(0, len(molecules_smiles_list) - 1)
+        protein_index = random.randint(0, len(final_protein_list_PubChem) - 1)
 
         if (drug_index, protein_index) not in drug_protein_index_pair_exclusive_list:
             drug_protein_index_pair_exclusive_list.append((drug_index, protein_index))
@@ -349,26 +390,33 @@ def main():
             count += 1
 
     input_matrix = np.concatenate((input_matrix_positive, input_matrix_negative), axis = 0)
+
     list_positive = [1] * np.shape(input_matrix_positive)[0]
     list_negative = [0] * np.shape(input_matrix_negative)[0]
+
     labels = list_positive + list_negative
 
     x_train, x_test, y_train, y_test = train_test_split(input_matrix, labels, test_size = 0.25)
 
-    DL.random_forest(x_train, x_test, y_train, y_test)
-    #DL.deep_learning(x_train, x_test, y_train, y_test)
-
-    sys.exit()
-
     print "we are doing machine leanring now."
-    NADH_list = read_uniprot_database('NADH_dehydrogenase.txt')
+    #NADH_list = read_uniprot_database('NADH_dehydrogenase.txt')
+
     #DL.random_forest(x_train, x_test, y_train, y_test)
-    exp_data = Generate_test_drug_input_matrix(['O=C1/C(=C(\C(=O)C(\OC)=C1\OC)C)C\C=C(/C)CC\C=C(/C)CC\C=C(/C)CC\C=C(/C)CC\C=C(/C)CC\C=C(/C)CC\C=C(/C)CC\C=C(/C)CC\C=C(/C)CC\C=C(/C)C'])
-    #exp_data = Generate_test_drug_input_matrix(['ClC1=C(OC2=CC=C(Cl)C=C2O)C=CC(Cl)=C1'])
-    final_scores = DL.random_forest_prediction(input_matrix, labels, exp_data, NADH_list)
-    print final_scores
-    print type(final_scores)
-    print len(final_scores)
+
+
+
+    #final_scores = DL.random_forest_prediction(input_matrix, labels, new_fragments_matrix, fragment_list, final_DRUG_bank_targets[0:10], "fragment_prediction_result.txt")
+    #print final_scores
+    #print type(final_scores)
+    #print len(final_protein_list_PubChem)
+    #print len(final_scores)
+
+    y_train_DL = np.asarray(y_train).reshape((len(y_train), 1))
+    y_test_DL = np.asarray(y_test).reshape((len(y_test), 1))
+
+    DL.deep_learning(x_train, x_test, y_train_DL, y_test_DL)
+
+
 
 
 
